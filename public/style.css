@@ -232,6 +232,10 @@ ul.mini p { margin-top: 2px; }
 .rangees .reprise-ligne { margin-left: 46px; color: var(--texte); }
 .rangees .reprise-ligne .ico { color: var(--ambre); }
 
+/* Statistique cliquable (« à traiter ») */
+.stat-action { cursor: pointer; box-shadow: var(--ombre), inset 0 0 0 1px var(--ambre-pale); }
+.stat-action .stat-nb { color: var(--ambre); }
+
 /* Direction : consignes, commentaires, réglages */
 .entete-actions { display: flex; gap: 8px; }
 .consigne { display: flex; gap: 10px; margin-top: 12px; padding: 10px 12px; background: var(--action-pale); color: #1b2f73; border-radius: 10px; font-size: .9rem; }

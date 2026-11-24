@@ -196,9 +196,9 @@ async function ecranEleve() {
   const { absences } = await api('mes-absences');
   const taches = absences.flatMap((a) => a.taches);
   const aFaire = taches.filter((t) => !t.fait_at);
-  const reprises = taches.filter((t) => t.examen && t.reprise_date && joursAvant(t.reprise_date) >= 0)
-    .sort((a, b) => a.reprise_date.localeCompare(b.reprise_date));
-  const prochaine = reprises[0];
+  const reprises = taches.filter((t) => t.examen && (!t.reprise_date || joursAvant(t.reprise_date) >= 0))
+    .sort((a, b) => (a.reprise_date || '9').localeCompare(b.reprise_date || '9'));
+  const prochaine = reprises.find((r) => r.reprise_date);
 
   app.innerHTML = `
     <div class="entete-page">
@@ -210,7 +210,7 @@ async function ecranEleve() {
     </div>
     <section class="stats">
       <div class="stat"><span class="stat-nb">${aFaire.length}</span><span class="stat-lib">${aFaire.length > 1 ? 'travaux' : 'travail'} à faire</span></div>
-      <div class="stat"><span class="stat-nb">${reprises.length}</span><span class="stat-lib">reprise${reprises.length > 1 ? 's' : ''} d'examen
+      <div class="stat"><span class="stat-nb">${reprises.length}</span><span class="stat-lib">récupération${reprises.length > 1 ? 's' : ''} à venir
         ${prochaine ? `<small>Prochaine : ${dateFr(prochaine.reprise_date)}, ${esc(prochaine.matiere || prochaine.enseignant)}</small>` : ''}</span></div>
     </section>
     ${absences.length ? '' : `<div class="vide-grand">${ico('calendrier')}<p>Aucune absence déclarée.</p><p class="aide">Ton prochain tournoi approche ? Déclare-le dès que tu connais les dates.</p></div>`}
@@ -237,7 +237,7 @@ async function ecranEleve() {
         <span class="details">${new Date(c.created_at).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' })}</span></div>
         <p>${esc(c.texte)}</p></li>`).join('')}</ul>` : ''}
       <div class="carte-section">
-        <h4>Travail demandé <span class="compte">${a.taches.filter((t) => t.fait_at).length}/${a.taches.length}</span></h4>
+        <h4>Ce que tes enseignants demandent <span class="compte">${a.taches.filter((t) => t.fait_at).length}/${a.taches.length}</span></h4>
         ${a.taches.length ? `<ul class="taches">${a.taches.map(tacheEleve).join('')}</ul>`
           : '<p class="vide">Rien pour l\'instant. Tes enseignants ajouteront le travail ici.</p>'}
       </div>
@@ -270,7 +270,7 @@ function tacheEleve(t) {
       ${t.travail ? `<p class="travail">${esc(t.travail)}</p>` : ''}
       ${t.remise ? `<p class="echeance ${retard ? 'retard' : ''}">${ico('horloge')} À remettre ${retard ? 'depuis le' : 'le'} <strong>${dateFr(t.remise)}</strong></p>` : ''}
       ${t.examen ? `<div class="reprise">${ico('examen')}<div>
-        <strong>Reprise d'examen${t.examen_nom ? ' · ' + esc(t.examen_nom) : ''}</strong>
+        <strong>Tu dois venir en récupération${t.examen_nom ? ' · ' + esc(t.examen_nom) : ''}</strong>
         <span>${t.reprise_date ? dateFr(t.reprise_date) : 'Date à confirmer avec ton enseignant'}${t.reprise_info ? ' · ' + esc(t.reprise_info) : ''}</span>
       </div></div>` : ''}
     </div>
@@ -324,11 +324,11 @@ const estDirection = () => moi?.role === 'direction';
 const ONGLETS = [
   ['tournois', 'liste', 'Tournois'],
   ['calendrier', 'calendrier', 'Calendrier'],
-  ['reprises', 'examen', 'Reprises'],
+  ['reprises', 'examen', 'Récupérations'],
   ['eleves', 'eleves', 'Élèves'],
   ['reglages', 'reglages', 'Réglages', true], // direction seulement
 ];
-const vue = { onglet: 'tournois', groupe: '', recherche: '', passes: false, mois: auj().slice(0, 7), jour: null };
+const vue = { onglet: 'tournois', groupe: '', recherche: '', passes: false, aTraiter: true, mois: auj().slice(0, 7), jour: null };
 
 async function ecranEnseignant() {
   document.body.className = 'page-enseignant';
@@ -373,7 +373,7 @@ function ongletTournois(contenu, tournois, groupes) {
   const prochains = tournois.filter((t) => joursAvant(t.debut) > 0 && joursAvant(t.debut) <= 14);
   const troisieme = estDirection()
     ? [actifs.flatMap((t) => t.eleves).filter((e) => e.preavis < 3).length, 'déclaration', 'tardive', 's']
-    : [actifs.flatMap((t) => t.eleves).filter((e) => !e.taches.some((ta) => ta.enseignant_id === moi.id)).length, 'élève', 'sans votre travail', 's'];
+    : [actifs.flatMap((t) => t.eleves).filter(sansReponse).length, 'absence', 'à traiter', 's'];
   const pl = (n, mot) => mot + (n > 1 ? 's' : '');
 
   contenu.innerHTML = `
@@ -387,14 +387,20 @@ function ongletTournois(contenu, tournois, groupes) {
     <section class="stats">
       <div class="stat"><span class="stat-nb">${absentsAuj}</span><span class="stat-lib">${pl(absentsAuj, 'absent')} aujourd'hui</span></div>
       <div class="stat"><span class="stat-nb">${prochains.length}</span><span class="stat-lib">${pl(prochains.length, 'tournoi')} d'ici 14 jours</span></div>
-      <div class="stat"><span class="stat-nb">${troisieme[0]}</span><span class="stat-lib">${pl(troisieme[0], troisieme[1])} ${troisieme[0] > 1 && estDirection() ? 'tardives' : troisieme[2]}</span></div>
+      <div class="stat ${estDirection() ? '' : 'stat-action'}" id="stat-traiter"><span class="stat-nb">${troisieme[0]}</span><span class="stat-lib">${pl(troisieme[0], troisieme[1])} ${troisieme[0] > 1 && estDirection() ? 'tardives' : troisieme[2]}</span></div>
     </section>
     <div class="filtres collant">
       <label class="recherche">${ico('recherche')}<input type="search" id="recherche" placeholder="Élève ou tournoi" value="${esc(vue.recherche)}" aria-label="Rechercher"></label>
       ${filtreGroupe(groupes)}
+      ${estDirection() ? '' : `<button class="puce" id="a-traiter" aria-pressed="${vue.aTraiter}">À traiter</button>`}
       <button class="puce" id="passes" aria-pressed="${vue.passes}">Passés</button>
     </div>
     <div id="tournois" class="liste-cartes"></div>`;
+  if (!estDirection()) {
+    const basculer = () => { vue.aTraiter = !vue.aTraiter; $('#a-traiter').setAttribute('aria-pressed', vue.aTraiter); dessiner(); };
+    $('#a-traiter').onclick = basculer;
+    $('#stat-traiter').onclick = () => { if (!vue.aTraiter) basculer(); };
+  }
   $('#recherche').oninput = (e) => { vue.recherche = e.target.value; dessiner(); };
   $('#filtre-groupe').onchange = (e) => { vue.groupe = e.target.value; dessiner(); };
   $('#passes').onclick = () => { vue.passes = !vue.passes; ecranEnseignant(); };
@@ -406,15 +412,24 @@ function ongletTournois(contenu, tournois, groupes) {
     zone.replaceChildren();
     const q = vue.recherche.trim().toLowerCase();
     const filtre = !!(q || vue.groupe);
+    const aTraiter = !estDirection() && vue.aTraiter;
     let n = 0;
     const ordre = [...tournois].sort((a, b) => (joursAvant(a.fin) < 0) - (joursAvant(b.fin) < 0)
       || (joursAvant(a.fin) < 0 ? b.debut.localeCompare(a.debut) : a.debut.localeCompare(b.debut)));
     for (const t of ordre) {
       const tournoiCorrespond = !q || t.nom.toLowerCase().includes(q) || (t.sport || '').toLowerCase().includes(q);
-      const eleves = t.eleves.filter((e) => (!vue.groupe || e.groupe === vue.groupe) && (tournoiCorrespond || e.nom.toLowerCase().includes(q)));
-      if (!eleves.length && (filtre || !estDirection())) continue; // la direction voit aussi les tournois encore vides
+      const eleves = t.eleves.filter((e) => (!vue.groupe || e.groupe === vue.groupe) && (tournoiCorrespond || e.nom.toLowerCase().includes(q))
+        && (!aTraiter || (joursAvant(t.fin) >= 0 && sansReponse(e))));
+      if (!eleves.length && (filtre || aTraiter || !estDirection())) continue; // la direction voit aussi les tournois encore vides
       n++;
       zone.append(carteTournoi(t, eleves));
+    }
+    if (!n && aTraiter && !filtre) {
+      zone.innerHTML = `<div class="vide-grand">${ico('coche')}<p>Vous avez répondu à toutes les absences à venir.</p>
+        <p class="aide">Les nouvelles déclarations des élèves apparaîtront ici.</p>
+        <button class="secondaire" id="voir-tout">Voir toutes les absences</button></div>`;
+      $('#voir-tout').onclick = () => $('#a-traiter').click();
+      return;
     }
     if (!n) zone.innerHTML = `<div class="vide-grand">${ico('liste')}<p>${filtre ? 'Aucun résultat pour ce filtre.' : 'Aucune absence déclarée pour les tournois à venir.'}</p>
       ${estDirection() && !filtre ? '<p class="aide">Inscrivez un tournoi avec le bouton « Tournoi ».</p>' : ''}</div>`;
@@ -439,7 +454,7 @@ function carteTournoi(t, eleves) {
     ${eleves.length ? `<ul class="rangees">${eleves.map(rangeeEleve).join('')}</ul>` : '<p class="vide sans-eleve">Aucun élève inscrit pour l\'instant.</p>'}
     <div class="carte-pied">
       ${estDirection() ? `<button class="secondaire" data-inscrire>${ico('ajout_eleve')} Inscrire des élèves</button>` : ''}
-      ${eleves.length ? `<button class="principal" data-ajouter>${ico('plus')} Travail ou reprise</button>` : ''}
+      ${eleves.length ? `<button class="principal" data-ajouter>${ico('plus')} ${estDirection() ? 'Travail ou récupération' : 'Indiquer le travail'}</button>` : ''}
     </div>`;
   $('[data-ajouter]', carte)?.addEventListener('click', () => ouvrirTache(t, eleves));
   $('[data-inscrire]', carte)?.addEventListener('click', () => inscrireEleves(t));
@@ -493,7 +508,7 @@ function rangeeEleve(e) {
     <div class="rangee-tete">
       <span class="avatar petit">${initiales(e.nom)}</span>
       <div class="rangee-nom"><strong>${esc(e.nom)}</strong><span class="details">${esc(e.groupe)}</span></div>
-      ${preavisPastille(e.preavis)}
+      ${!estDirection() && sansReponse(e) ? '<span class="pastille orange">À traiter</span>' : preavisPastille(e.preavis)}
       <button class="icone-btn petit" data-eleve="${e.absence_id}" aria-label="${estDirection() ? 'Actions' : 'Commenter'}">${ico(estDirection() ? 'plus_actions' : 'bulle')}</button>
     </div>
     ${e.note ? `<p class="note">${esc(e.note)}</p>` : ''}
@@ -515,6 +530,11 @@ function commentaireProf(c) {
   </li>`;
 }
 
+// L'enseignant connecté n'a encore rien indiqué à cet élève pour cette absence.
+function sansReponse(e) {
+  return !e.taches.some((ta) => ta.enseignant_id === moi.id);
+}
+
 function initiales(nom) {
   return esc(nom.split(/\s+/).filter(Boolean).slice(0, 2).map((m) => m[0]).join('').toUpperCase());
 }
@@ -529,7 +549,7 @@ function tacheProf(t) {
     </div>
     ${t.travail ? `<p>${esc(t.travail)}</p>` : ''}
     ${t.remise ? `<p class="details">À remettre le ${dateFr(t.remise)}</p>` : ''}
-    ${t.examen ? `<p class="reprise-ligne">${ico('examen')} Reprise${t.examen_nom ? ' · ' + esc(t.examen_nom) : ''} : ${t.reprise_date ? dateFr(t.reprise_date) : 'date à fixer'}${t.reprise_info ? ', ' + esc(t.reprise_info) : ''}</p>` : ''}
+    ${t.examen ? `<p class="reprise-ligne">${ico('examen')} Récupération${t.examen_nom ? ' · ' + esc(t.examen_nom) : ''} : ${t.reprise_date ? dateFr(t.reprise_date) : 'date à fixer'}${t.reprise_info ? ', ' + esc(t.reprise_info) : ''}</p>` : ''}
   </li>`;
 }
 
@@ -651,7 +671,7 @@ function commenter(e, t) {
     sousTitre: `${e.nom} · ${t.nom}`,
     bouton: 'Publier',
     champs: [
-      { nom: 'texte', type: 'textarea', label: 'Commentaire', lignes: 4, placeholder: 'Ex. : a remis son travail en avance ; à revoir avant la reprise.' },
+      { nom: 'texte', type: 'textarea', label: 'Commentaire', lignes: 4, placeholder: 'Ex. : a remis son travail en avance ; à revoir avant la récupération.' },
       { nom: 'visible_eleve', type: 'switch', label: 'L\'élève peut le lire' },
     ],
     envoyer: async (v) => {
@@ -697,8 +717,11 @@ function ouvrirTache(t, eleves) {
   const form = $('#form-tache');
   form.reset();
   $('#tache-tournoi').textContent = `${t.nom} · ${periode(t.debut, t.fin)}`;
+  // Par défaut : les élèves qui attendent encore une réponse de cet enseignant (tous s'il a déjà répondu à chacun).
+  const attente = eleves.filter(sansReponse);
+  const coches = new Set((attente.length ? attente : eleves).map((e) => e.absence_id));
   $('#tache-eleves').innerHTML = eleves.map((e) =>
-    `<label class="case"><input type="checkbox" name="absence" value="${e.absence_id}" checked><span>${esc(e.nom)}</span><span class="details">${esc(e.groupe)}</span></label>`).join('');
+    `<label class="case"><input type="checkbox" name="absence" value="${e.absence_id}" ${coches.has(e.absence_id) ? 'checked' : ''}><span>${esc(e.nom)}</span><span class="details">${sansReponse(e) ? 'en attente · ' : ''}${esc(e.groupe)}</span></label>`).join('');
   const tous = $('#tache-tous');
   const majTous = () => {
     const cases = [...form.querySelectorAll('[name=absence]')];
@@ -714,13 +737,15 @@ function ouvrirTache(t, eleves) {
   majTous();
   const bloc = $('#bloc-examen');
   bloc.hidden = true;
+  $('#bloc-travail').hidden = false;
   form.examen.onchange = () => { bloc.hidden = !form.examen.checked; };
+  form.aucun.onchange = () => { $('#bloc-travail').hidden = form.aucun.checked; };
   form.onsubmit = async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
     const ids = [...form.querySelectorAll('[name=absence]:checked')].map((c) => Number(c.value));
     try {
-      const r = await api('taches', { method: 'POST', body: { ...f, examen: form.examen.checked, absence_ids: ids } });
+      const r = await api('taches', { method: 'POST', body: { ...f, aucun: form.aucun.checked, examen: !form.aucun.checked && form.examen.checked, absence_ids: ids } });
       dlg.close();
       toast(`Envoyé à ${r.nb} élève${r.nb > 1 ? 's' : ''}`);
       ecranEnseignant();
@@ -837,8 +862,8 @@ function ongletReprises(contenu, reprises) {
     parDate.get(r.reprise_date).push(r);
   }
   contenu.innerHTML = `
-    <div class="entete-page"><h1>Reprises d'examen</h1></div>
-    <p class="aide">Toutes les reprises à venir, toutes matières confondues.</p>
+    <div class="entete-page"><h1>Récupérations</h1></div>
+    <p class="aide">Les élèves qui doivent venir reprendre un examen, un test ou un labo, toutes matières confondues.</p>
     ${reprises.length ? [...parDate].map(([date, liste]) => `
       <section class="jour-reprises">
         <h2 class="jour-titre">${blocDate(date, date)}<span>${dateFr(date, { weekday: 'long', day: 'numeric', month: 'long' })}</span></h2>
@@ -850,7 +875,7 @@ function ongletReprises(contenu, reprises) {
           <p class="reprise-ligne">${ico('examen')} <span><strong>${esc(r.matiere || r.enseignant)}</strong>${r.examen_nom ? ' · ' + esc(r.examen_nom) : ''}
             ${r.reprise_info ? `<span class="details"> · ${esc(r.reprise_info)}</span>` : ''}<span class="details"> · ${esc(r.enseignant)}</span></span></p>
         </li>`).join('')}</ul>
-      </section>`).join('') : `<div class="vide-grand">${ico('examen')}<p>Aucune reprise d'examen prévue.</p></div>`}`;
+      </section>`).join('') : `<div class="vide-grand">${ico('examen')}<p>Aucune récupération prévue.</p></div>`}`;
 }
 
 function ongletEleves(contenu, eleves) {

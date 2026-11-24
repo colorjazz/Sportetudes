@@ -1,13 +1,14 @@
 // Transmission (Sport-études, Antoine Saint-Exupéry) — serveur (Cloudflare Worker + base D1).
 //
-// Les élèves déclarent leurs absences pour un tournoi ; les enseignants y ajoutent le travail demandé
-// et la date de reprise d'un examen manqué ; la direction gère tout (tournois, absences, élèves, réglages).
+// Les élèves déclarent leurs tournois à l'avance ; ensuite, chaque enseignant leur indique le travail à faire
+// pendant l'absence et s'ils doivent venir en récupération (reprendre un examen, un test…) ; la direction gère tout (tournois, absences, élèves, réglages).
 // Pas de comptes ni de courriels : trois codes (élève, enseignant, direction) et un NIP choisi par chaque élève.
 import SCHEMA from '../schema.sql';
 
 const SESSION_MS = 200 * 24 * 3600 * 1000; // une année scolaire
 const DAY_MS = 24 * 3600 * 1000;
 const PREAVIS_DEFAUT = 7;
+const RIEN_A_FAIRE = 'Rien à faire pour ce cours pendant ton absence.';
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -341,7 +342,7 @@ const SELECT_TACHES = `SELECT ta.*, e.nom AS enseignant, e.matiere FROM taches t
   JOIN enseignants e ON e.id = ta.enseignant_id`;
 const SELECT_COMMENTAIRES = `SELECT c.*, e.nom AS auteur FROM commentaires c JOIN enseignants e ON e.id = c.auteur_id`;
 
-// Vue de l'élève : ses absences, avec le travail, les reprises d'examen et les messages qui lui sont destinés.
+// Vue de l'élève : ses absences, avec le travail, les récupérations et les messages qui lui sont destinés.
 async function mesAbsences({ request, env }) {
   const eleve = await session(request, env, 'eleve');
   const { results: absences } = await env.DB.prepare(
@@ -396,7 +397,7 @@ async function tableau({ request, env, url }) {
     })),
   })).filter((t) => p.role === 'direction' || t.eleves.length);
 
-  // Reprises d'examen à venir, toutes matières, pour planifier les locaux.
+  // Récupérations à venir, toutes matières, pour planifier les locaux.
   const { results: reprises } = await env.DB.prepare(
     `SELECT ta.id, ta.examen_nom, ta.reprise_date, ta.reprise_info, en.nom AS enseignant, en.matiere,
             el.nom AS eleve, el.groupe, t.nom AS tournoi
@@ -413,20 +414,22 @@ async function ajouterTache({ request, env }) {
   const b = await body(request);
   const ids = [...new Set((Array.isArray(b.absence_ids) ? b.absence_ids : []).map(Number).filter(Boolean))].slice(0, 200);
   if (!ids.length) throw new HttpError(400, 'Choisissez au moins un élève.');
-  const travail = texteLong(b.travail);
-  const examen = b.examen ? 1 : 0;
-  if (!travail && !examen) throw new HttpError(400, 'Décrivez le travail à faire ou cochez « Examen à reprendre ».');
-  const remise = date(b.remise, 'date de remise', false);
-  const repriseDate = examen ? date(b.reprise_date, 'date de reprise de l’examen', false) : null;
+  // « Rien à faire pour mon cours » : l'élève sait que l'enseignant a vu son absence ; compté comme déjà fait.
+  const aucun = !!b.aucun;
+  const travail = aucun ? RIEN_A_FAIRE : texteLong(b.travail);
+  const examen = !aucun && b.examen ? 1 : 0;
+  if (!travail && !examen) throw new HttpError(400, 'Décrivez le travail à faire, indiquez une récupération ou cochez « Rien à faire pour mon cours ».');
+  const remise = aucun ? null : date(b.remise, 'date de remise', false);
+  const repriseDate = examen ? date(b.reprise_date, 'date de la récupération', false) : null;
   const now = Date.now();
   const valides = (await env.DB.prepare(`SELECT id FROM absences WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all())
     .results.map((r) => r.id);
   if (!valides.length) throw new HttpError(404, 'Absence introuvable.');
   await env.DB.batch(valides.map((aid) => env.DB.prepare(
-    `INSERT INTO taches (absence_id, enseignant_id, travail, remise, examen, examen_nom, reprise_date, reprise_info, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    `INSERT INTO taches (absence_id, enseignant_id, travail, remise, examen, examen_nom, reprise_date, reprise_info, fait_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(aid, prof.id, travail, remise, examen, examen ? texte(b.examen_nom, 120) : '', repriseDate,
-      examen ? texte(b.reprise_info, 200) : '', now)));
+      examen ? texte(b.reprise_info, 200) : '', aucun ? now : null, now)));
   return { ok: true, nb: valides.length };
 }
 

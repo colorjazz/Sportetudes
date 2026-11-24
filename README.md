@@ -2,6 +2,11 @@
 
 Application du programme Sport-études de l'école Antoine Saint-Exupéry.
 
+**Fonctionnement :** les élèves déclarent leurs tournois à l'avance. Ensuite, chaque enseignant leur indique
+le travail à faire pendant leur absence et s'ils doivent venir en récupération pour reprendre un examen,
+un test ou un labo (ou « Rien à faire pour mon cours »). Le filtre « À traiter » montre à chaque enseignant
+les absences auxquelles il n'a pas encore répondu.
+
 Application web toute simple pour les écoles sport-études :
 
 - **Élèves** : déclarent leurs absences pour un tournoi (en choisissant un tournoi déjà inscrit par un coéquipier

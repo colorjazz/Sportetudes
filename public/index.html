@@ -36,7 +36,7 @@
     <section class="connexion">
       <h1>Transmission</h1>
       <p class="ecole">Sport-études · Antoine Saint-Exupéry</p>
-      <p class="intro">Les élèves déclarent leurs tournois. Les enseignants y joignent le travail à faire et les reprises d'examen.</p>
+      <p class="intro">Les élèves déclarent leurs tournois. Ensuite, chaque enseignant leur indique le travail à faire pendant leur absence et s'ils doivent venir en récupération.</p>
       <div class="segment" role="tablist">
         <button type="button" data-role="eleve" role="tab">Élève</button>
         <button type="button" data-role="enseignant" role="tab">Enseignant</button>
@@ -90,12 +90,12 @@
     </form>
   </dialog>
 
-  <!-- Feuille : demander du travail / une reprise d'examen (enseignant) -->
+  <!-- Feuille : réponse de l'enseignant (travail à faire, récupération) -->
   <dialog id="dlg-tache" class="feuille">
     <form id="form-tache" novalidate>
       <header class="feuille-tete">
         <div>
-          <h2>Travail à faire</h2>
+          <h2>Pendant l'absence</h2>
           <p class="details" id="tache-tournoi"></p>
         </div>
         <button type="button" class="icone-btn" data-fermer aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -105,16 +105,19 @@
           <legend>Élèves <button type="button" class="lien" id="tache-tous">Tout décocher</button></legend>
           <div id="tache-eleves" class="cases"></div>
         </fieldset>
-        <label>Travail <textarea name="travail" rows="3" placeholder="Lire le chapitre 4 et faire les exercices p. 112 à 115."></textarea></label>
-        <label>À remettre le <input type="date" name="remise"></label>
-        <label class="interrupteur"><input type="checkbox" name="examen" role="switch"> <span>Un examen est à reprendre</span></label>
-        <fieldset id="bloc-examen" class="groupe-champs" hidden>
-          <label>Examen <input name="examen_nom" placeholder="Examen de l'étape 2"></label>
-          <div class="deux">
-            <label>Date de reprise <input type="date" name="reprise_date"></label>
-            <label>Heure et local <input name="reprise_info" placeholder="8 h 15, B-204"></label>
-          </div>
-        </fieldset>
+        <label class="interrupteur"><input type="checkbox" name="aucun" role="switch"> <span>Rien à faire pour mon cours</span></label>
+        <div id="bloc-travail">
+          <label>Travail à faire <textarea name="travail" rows="3" placeholder="Lire le chapitre 4 et faire les exercices p. 112 à 115."></textarea></label>
+          <label>À remettre le <input type="date" name="remise"></label>
+          <label class="interrupteur"><input type="checkbox" name="examen" role="switch"> <span>L'élève doit venir en récupération</span></label>
+          <fieldset id="bloc-examen" class="groupe-champs" hidden>
+            <label>À reprendre <input name="examen_nom" placeholder="Examen de l'étape 2, test, laboratoire…"></label>
+            <div class="deux">
+              <label>Date de la récupération <input type="date" name="reprise_date"></label>
+              <label>Heure et local <input name="reprise_info" placeholder="Midi, local B-204"></label>
+            </div>
+          </fieldset>
+        </div>
         <p class="erreur" hidden></p>
       </div>
       <footer class="feuille-pied">

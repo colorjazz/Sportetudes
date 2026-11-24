@@ -1,7 +1,7 @@
 // Démonstration : remplace le serveur par des données fictives gardées dans le navigateur (localStorage).
 // Mêmes routes que src/worker.js, pour montrer l'application sans la mettre en ligne.
 (() => {
-  const CLE = 'transmission-demo-v1';
+  const CLE = 'transmission-demo-v2';
   const JOUR = 864e5;
   const iso = (dec) => new Date(Date.now() + dec * JOUR).toLocaleDateString('en-CA');
   const cle = (n) => n.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -230,10 +230,12 @@
       const p = qui(h, 'enseignant');
       const ids = (b.absence_ids || []).map(Number);
       if (!ids.length) throw new E(400, 'Choisissez au moins un élève.');
-      if (!(b.travail || '').trim() && !b.examen) throw new E(400, 'Décrivez le travail à faire ou cochez « Examen à reprendre ».');
+      const aucun = !!b.aucun;
+      if (!aucun && !(b.travail || '').trim() && !b.examen) throw new E(400, 'Décrivez le travail à faire, indiquez une récupération ou cochez « Rien à faire pour mon cours ».');
+      if (aucun) b = { travail: 'Rien à faire pour ce cours pendant ton absence.' };
       ids.forEach((aid) => db.taches.push({ id: db.n++, absence_id: aid, enseignant_id: p.id, travail: (b.travail || '').trim(), remise: b.remise || null,
         examen: b.examen ? 1 : 0, examen_nom: b.examen ? b.examen_nom || '' : '', reprise_date: b.examen ? b.reprise_date || null : null,
-        reprise_info: b.examen ? b.reprise_info || '' : '', fait_at: null, created_at: Date.now() }));
+        reprise_info: b.examen ? b.reprise_info || '' : '', fait_at: aucun ? Date.now() : null, created_at: Date.now() }));
       return { ok: true, nb: ids.length };
     },
     'DELETE taches': (h, b, id) => { qui(h, 'enseignant'); db.taches = db.taches.filter((t) => t.id !== id); return { ok: true }; },
