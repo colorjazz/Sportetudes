@@ -322,18 +322,18 @@ async function ouvrirDeclaration() {
 
 const estDirection = () => moi?.role === 'direction';
 const ONGLETS = [
-  ['tournois', 'liste', 'Tournois'],
   ['calendrier', 'calendrier', 'Calendrier'],
+  ['tournois', 'liste', 'Tournois'],
   ['reprises', 'examen', 'Récupérations'],
   ['eleves', 'eleves', 'Élèves'],
   ['reglages', 'reglages', 'Réglages', true], // direction seulement
 ];
-const vue = { onglet: 'tournois', groupe: '', recherche: '', passes: false, aTraiter: true, mois: auj().slice(0, 7), jour: null };
+const vue = { onglet: 'calendrier', groupe: '', recherche: '', passes: false, aTraiter: true, mois: auj().slice(0, 7), jour: null };
 
 async function ecranEnseignant() {
   document.body.className = 'page-enseignant';
   const onglets = ONGLETS.filter((o) => !o[3] || estDirection());
-  if (!onglets.some((o) => o[0] === vue.onglet)) vue.onglet = 'tournois';
+  if (!onglets.some((o) => o[0] === vue.onglet)) vue.onglet = 'calendrier';
   const [tab, liste, reg] = await Promise.all([
     api('tableau' + (vue.passes || vue.onglet === 'calendrier' ? '?passes=1' : '')),
     vue.onglet === 'eleves' ? api('eleves') : null,
@@ -774,7 +774,12 @@ function ongletCalendrier(contenu, tournois, groupes) {
   const total = compte(Object.values(parJour).flat());
   const pic = Object.entries(parJour).reduce((m, [j, l]) => (compte(l) > m.n ? { j, n: compte(l) } : m), { j: null, n: 0 });
   const titre = premier.toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });
-  if (!vue.jour || !parJour[vue.jour]) vue.jour = parJour[auj()] ? auj() : null;
+  if (!vue.jour || !parJour[vue.jour]) {
+    const prochain = Object.keys(parJour).find((j) => j >= auj() && parJour[j].length);
+    vue.jour = parJour[auj()]?.length ? auj() : prochain || (parJour[auj()] ? auj() : null);
+  }
+  // Point orange : des élèves absents ce jour-là attendent encore la réponse de l'enseignant connecté.
+  const attendReponse = (l) => !estDirection() && l.some((e) => joursAvant(e.tournoi.fin) >= 0 && sansReponse(e));
 
   let cases = '<span class="cal-vide"></span>'.repeat(decalage);
   for (const [jour, liste] of Object.entries(parJour)) {
@@ -783,7 +788,7 @@ function ongletCalendrier(contenu, tournois, groupes) {
     const niveau = n ? Math.min(4, Math.ceil((n / max) * 4)) : 0;
     const cls = ['cal-jour', `n${niveau}`, d.getDay() % 6 === 0 ? 'fds' : '', jour === auj() ? 'auj' : '', jour === vue.jour ? 'choisi' : ''].join(' ');
     cases += `<button class="${cls}" data-jour="${jour}" aria-label="${dateFr(jour)} : ${n} absent${n > 1 ? 's' : ''}">
-      <span class="cal-num">${d.getDate()}</span>${n ? `<span class="cal-nb">${n}</span>` : ''}
+      <span class="cal-num">${d.getDate()}</span>${n ? `<span class="cal-nb">${n}</span>` : ''}${attendReponse(liste) ? '<span class="cal-point" aria-hidden="true"></span>' : ''}
     </button>`;
   }
 
@@ -805,7 +810,7 @@ function ongletCalendrier(contenu, tournois, groupes) {
         ${['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((j, i) => `<span class="cal-entete"><span class="court">${j}</span><span class="long">${['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][i]}</span></span>`).join('')}
         ${cases}
       </div>
-      <div class="legende" aria-hidden="true"><span>Moins</span><i class="n1"></i><i class="n2"></i><i class="n3"></i><i class="n4"></i><span>Plus d'absents</span></div>
+      <div class="legende" aria-hidden="true">${estDirection() ? '' : '<span class="leg-point"><span class="cal-point"></span> À traiter</span>'}<span>Moins</span><i class="n1"></i><i class="n2"></i><i class="n3"></i><i class="n4"></i><span>Plus d'absents</span></div>
     </section>
     <section id="detail-jour"></section>`;
 
@@ -836,22 +841,15 @@ function ongletCalendrier(contenu, tournois, groupes) {
     parTournoi.get(e.tournoi.id).eleves.push(e);
   }
   const n = compte(liste);
+  const enAttente = estDirection() ? 0 : liste.filter((e) => joursAvant(e.tournoi.fin) >= 0 && sansReponse(e)).length;
   detail.innerHTML = `
     <h2 class="detail-titre">${dateFr(vue.jour, { weekday: 'long', day: 'numeric', month: 'long' })}
-      <span class="details">${n ? `${n} absent${n > 1 ? 's' : ''}` : 'aucun absent'}</span></h2>
-    ${[...parTournoi.values()].map(({ t, eleves }) => `
-      <article class="carte">
-        <div class="carte-tete compacte">
-          <div class="carte-titre">
-            <h3>${esc(t.nom)}</h3>
-            <p class="meta">${meta(periode(t.debut, t.fin), esc(t.sport), esc(t.lieu))}</p>
-          </div>
-        </div>
-        <ul class="rangees">${eleves.map((e) => `<li><div class="rangee-tete">
-          <span class="avatar petit">${initiales(e.nom)}</span>
-          <div class="rangee-nom"><strong>${esc(e.nom)}</strong><span class="details">${esc(e.groupe)}</span></div>
-        </div></li>`).join('')}</ul>
-      </article>`).join('')}`;
+      <span class="details">${n ? `${n} absent${n > 1 ? 's' : ''}` : 'aucun absent'}</span>
+      ${enAttente ? `<span class="pastille orange">${enAttente} à traiter</span>` : ''}</h2>
+    ${n ? '' : '<p class="aide">Aucun élève absent ce jour-là.</p>'}
+    <div class="liste-cartes" id="cartes-jour"></div>`;
+  // Les mêmes cartes que l'onglet Tournois : on répond aux élèves (travail, récupération, commentaire) directement d'ici.
+  for (const { t, eleves } of parTournoi.values()) $('#cartes-jour').append(carteTournoi(t, eleves));
 }
 
 function ongletReprises(contenu, reprises) {

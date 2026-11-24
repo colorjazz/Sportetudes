@@ -214,12 +214,16 @@ ul.mini p { margin-top: 2px; }
 .cal-jour.n3 .cal-num, .cal-jour.n4 .cal-num { color: rgba(255,255,255,.85); }
 .cal-jour.auj .cal-num { background: var(--encre); color: #fff; border-radius: 999px; padding: 0 7px; }
 .cal-jour.choisi { box-shadow: 0 0 0 2px var(--carte), 0 0 0 4px var(--encre); }
-.legende { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 12px; font-size: .78rem; color: var(--gris); }
+.cal-point { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #e08a00; box-shadow: 0 0 0 2px #fff; }
+.leg-point { display: inline-flex; align-items: center; gap: 6px; margin-right: auto; }
+.leg-point .cal-point { position: static; }
+.detail-titre .pastille { align-self: center; }
+.legende { flex-wrap: wrap; display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 12px; font-size: .78rem; color: var(--gris); }
 .legende i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
 .legende span:first-child { margin-right: 4px; } .legende span:last-child { margin-left: 4px; }
 .legende .n1 { background: #dde5fb; } .legende .n2 { background: #a9bcf3; } .legende .n3 { background: #5b7ee6; } .legende .n4 { background: #1f3fb0; }
 #detail-jour { margin-top: 20px; scroll-margin-top: 70px; }
-.detail-titre { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; text-transform: none; }
+.detail-titre { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 12px; text-transform: none; }
 .detail-titre::first-letter { text-transform: uppercase; }
 .carte-tete.compacte + .rangees { margin-top: 10px; }
 
@@ -300,6 +304,7 @@ dialog form { display: flex; flex-direction: column; width: 100%; max-height: 90
   .nav-bas button:hover { background: #efefec; color: var(--texte); }
   .nav-bas button[aria-current=page] { background: var(--action-pale); color: var(--action-fonce); font-weight: 600; }
   .nav-bas.nav-action { display: none; }
+  .cal-jour { aspect-ratio: 1 / .58; padding: 6px 8px; }
   main { padding: 28px 32px 48px; }
 }
 
@@ -351,6 +356,7 @@ dialog form { display: flex; flex-direction: column; width: 100%; max-height: 90
   .cal-num { font-size: .75rem; }
   .cal-nb { font-size: 1rem; align-self: center; }
   .cal-jour.auj .cal-num { padding: 0 5px; }
+  .cal-point { top: 3px; right: 3px; width: 7px; height: 7px; }
   .deux { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .connexion .deux { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
   .connexion h1 { font-size: 1.6rem; }

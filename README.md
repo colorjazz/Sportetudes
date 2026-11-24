@@ -7,6 +7,10 @@ le travail à faire pendant leur absence et s'ils doivent venir en récupératio
 un test ou un labo (ou « Rien à faire pour mon cours »). Le filtre « À traiter » montre à chaque enseignant
 les absences auxquelles il n'a pas encore répondu.
 
+Le personnel arrive sur le **calendrier** : chaque case indique le nombre d'élèves absents, un point orange marque
+les jours où l'enseignant n'a pas encore répondu, et toucher un jour affiche ses tournois et ses élèves pour les
+traiter directement (travail, récupération, commentaire).
+
 Application web toute simple pour les écoles sport-études :
 
 - **Élèves** : déclarent leurs absences pour un tournoi (en choisissant un tournoi déjà inscrit par un coéquipier
