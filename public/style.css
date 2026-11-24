@@ -132,7 +132,8 @@ label.case .details { margin-left: auto; }
 .liste-cartes .carte { margin: 0; }
 .carte.passee { opacity: .6; }
 .carte-tete { display: flex; align-items: flex-start; gap: 14px; }
-.etat { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.etat { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
+.etat .details { white-space: nowrap; }
 .carte-titre { flex: 1; }
 .meta { display: flex; flex-wrap: wrap; gap: 2px 0; color: var(--gris); font-size: .875rem; margin-top: 3px; }
 .meta span:not(:last-child)::after { content: '·'; margin: 0 6px; color: var(--gris-clair); }
@@ -201,7 +202,7 @@ ul.mini p { margin-top: 2px; }
 .cal-nav { display: flex; align-items: center; gap: 4px; }
 .cal-resume { margin-left: auto; }
 .calendrier-carte { padding: 12px; }
-.calendrier { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.calendrier { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .cal-entete { text-align: center; font-weight: 600; color: var(--gris); font-size: .8rem; padding: 2px 0 4px; }
 .cal-entete .court { display: none; }
 .cal-jour { aspect-ratio: 1 / .85; min-height: 0; padding: 8px; border-radius: 10px; background: #f7f7f5; display: flex; flex-direction: column;

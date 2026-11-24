@@ -9,7 +9,8 @@ les absences auxquelles il n'a pas encore répondu.
 
 Le personnel arrive sur le **calendrier** : chaque case indique le nombre d'élèves absents, un point orange marque
 les jours où l'enseignant n'a pas encore répondu, et toucher un jour affiche ses tournois et ses élèves pour les
-traiter directement (travail, récupération, commentaire).
+traiter directement (travail, récupération, commentaire). Le calendrier va du lundi au vendredi : une absence
+qui tombe seulement la fin de semaine ne fait manquer aucun cours et n'est jamais « à traiter ».
 
 Application web toute simple pour les écoles sport-études :
 

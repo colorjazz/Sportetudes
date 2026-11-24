@@ -70,6 +70,18 @@ function periode(debut, fin) {
 }
 
 // Petit bloc « 27 NOV. » en tête des cartes de tournoi
+// Jours de classe (lundi au vendredi) couverts par une absence : la fin de semaine, aucun cours n'est manqué.
+function joursDeClasse(debut, fin) {
+  let n = 0;
+  for (let d = new Date(debut + 'T12:00'); d <= new Date(fin + 'T12:00'); d.setDate(d.getDate() + 1)) if (d.getDay() % 6 !== 0) n++;
+  return n;
+}
+
+function joursClasseTexte(debut, fin) {
+  const n = joursDeClasse(debut, fin);
+  return n ? `<span class="details">${n} jour${n > 1 ? 's' : ''} de classe</span>` : '<span class="pastille grise" title="Aucun cours manqué">Fin de semaine</span>';
+}
+
 function blocDate(debut, fin) {
   const d = new Date(debut + 'T12:00');
   const nb = joursAvant(fin) - joursAvant(debut) + 1;
@@ -227,7 +239,7 @@ async function ecranEleve() {
         <div class="carte-titre">
           <h3>${esc(a.tournoi)}</h3>
           <p class="meta">${meta(periode(a.debut, a.fin), esc(a.sport), esc(a.lieu))}</p>
-          <div class="etat">${etat(a.debut, a.fin)}</div>
+          <div class="etat">${etat(a.debut, a.fin)}${joursClasseTexte(a.debut, a.fin)}</div>
         </div>
       </div>
       ${a.tournoi_note ? `<p class="consigne">${ico('info')}<span>${esc(a.tournoi_note)}</span></p>` : ''}
@@ -239,7 +251,8 @@ async function ecranEleve() {
       <div class="carte-section">
         <h4>Ce que tes enseignants demandent <span class="compte">${a.taches.filter((t) => t.fait_at).length}/${a.taches.length}</span></h4>
         ${a.taches.length ? `<ul class="taches">${a.taches.map(tacheEleve).join('')}</ul>`
-          : '<p class="vide">Rien pour l\'instant. Tes enseignants ajouteront le travail ici.</p>'}
+          : joursDeClasse(a.debut, a.fin) ? '<p class="vide">Rien pour l\'instant. Tes enseignants ajouteront le travail ici.</p>'
+            : '<p class="vide">Ton tournoi tombe la fin de semaine : tu ne manques aucun cours.</p>'}
       </div>
       ${a.taches.length ? '' : `<div class="carte-pied"><button class="lien danger" data-annuler>Annuler cette absence</button></div>`}`;
     carte.querySelectorAll('[data-fait]').forEach((b) => {
@@ -373,7 +386,7 @@ function ongletTournois(contenu, tournois, groupes) {
   const prochains = tournois.filter((t) => joursAvant(t.debut) > 0 && joursAvant(t.debut) <= 14);
   const troisieme = estDirection()
     ? [actifs.flatMap((t) => t.eleves).filter((e) => e.preavis < 3).length, 'déclaration', 'tardive', 's']
-    : [actifs.flatMap((t) => t.eleves).filter(sansReponse).length, 'absence', 'à traiter', 's'];
+    : [actifs.flatMap((t) => t.eleves.filter((e) => sansReponse(e, t))).length, 'absence', 'à traiter', 's'];
   const pl = (n, mot) => mot + (n > 1 ? 's' : '');
 
   contenu.innerHTML = `
@@ -419,7 +432,7 @@ function ongletTournois(contenu, tournois, groupes) {
     for (const t of ordre) {
       const tournoiCorrespond = !q || t.nom.toLowerCase().includes(q) || (t.sport || '').toLowerCase().includes(q);
       const eleves = t.eleves.filter((e) => (!vue.groupe || e.groupe === vue.groupe) && (tournoiCorrespond || e.nom.toLowerCase().includes(q))
-        && (!aTraiter || (joursAvant(t.fin) >= 0 && sansReponse(e))));
+        && (!aTraiter || (joursAvant(t.fin) >= 0 && sansReponse(e, t))));
       if (!eleves.length && (filtre || aTraiter || !estDirection())) continue; // la direction voit aussi les tournois encore vides
       n++;
       zone.append(carteTournoi(t, eleves));
@@ -446,12 +459,12 @@ function carteTournoi(t, eleves) {
       <div class="carte-titre">
         <h3>${esc(t.nom)}</h3>
         <p class="meta">${meta(periode(t.debut, t.fin), esc(t.sport), esc(t.lieu))}</p>
-        <div class="etat">${etat(t.debut, t.fin)}<span class="details">${eleves.length} élève${eleves.length > 1 ? 's' : ''}</span></div>
+        <div class="etat">${etat(t.debut, t.fin)}<span class="details">${eleves.length} élève${eleves.length > 1 ? 's' : ''}</span>${joursClasseTexte(t.debut, t.fin)}</div>
       </div>
       ${estDirection() ? `<button class="icone-btn" data-menu-tournoi aria-label="Actions sur le tournoi">${ico('plus_actions')}</button>` : ''}
     </div>
     ${t.note ? `<p class="consigne">${ico('info')}<span>${esc(t.note)}</span></p>` : ''}
-    ${eleves.length ? `<ul class="rangees">${eleves.map(rangeeEleve).join('')}</ul>` : '<p class="vide sans-eleve">Aucun élève inscrit pour l\'instant.</p>'}
+    ${eleves.length ? `<ul class="rangees">${eleves.map((e) => rangeeEleve(e, t)).join('')}</ul>` : '<p class="vide sans-eleve">Aucun élève inscrit pour l\'instant.</p>'}
     <div class="carte-pied">
       ${estDirection() ? `<button class="secondaire" data-inscrire>${ico('ajout_eleve')} Inscrire des élèves</button>` : ''}
       ${eleves.length ? `<button class="principal" data-ajouter>${ico('plus')} ${estDirection() ? 'Travail ou récupération' : 'Indiquer le travail'}</button>` : ''}
@@ -503,12 +516,12 @@ function carteTournoi(t, eleves) {
   return carte;
 }
 
-function rangeeEleve(e) {
+function rangeeEleve(e, t) {
   return `<li>
     <div class="rangee-tete">
       <span class="avatar petit">${initiales(e.nom)}</span>
       <div class="rangee-nom"><strong>${esc(e.nom)}</strong><span class="details">${esc(e.groupe)}</span></div>
-      ${!estDirection() && sansReponse(e) ? '<span class="pastille orange">À traiter</span>' : preavisPastille(e.preavis)}
+      ${!estDirection() && sansReponse(e, t) ? '<span class="pastille orange">À traiter</span>' : preavisPastille(e.preavis)}
       <button class="icone-btn petit" data-eleve="${e.absence_id}" aria-label="${estDirection() ? 'Actions' : 'Commenter'}">${ico(estDirection() ? 'plus_actions' : 'bulle')}</button>
     </div>
     ${e.note ? `<p class="note">${esc(e.note)}</p>` : ''}
@@ -531,8 +544,9 @@ function commentaireProf(c) {
 }
 
 // L'enseignant connecté n'a encore rien indiqué à cet élève pour cette absence.
-function sansReponse(e) {
-  return !e.taches.some((ta) => ta.enseignant_id === moi.id);
+// Une absence qui tombe seulement la fin de semaine n'a rien à traiter.
+function sansReponse(e, t = e.tournoi) {
+  return joursDeClasse(t.debut, t.fin) > 0 && !e.taches.some((ta) => ta.enseignant_id === moi.id);
 }
 
 function initiales(nom) {
@@ -718,10 +732,10 @@ function ouvrirTache(t, eleves) {
   form.reset();
   $('#tache-tournoi').textContent = `${t.nom} · ${periode(t.debut, t.fin)}`;
   // Par défaut : les élèves qui attendent encore une réponse de cet enseignant (tous s'il a déjà répondu à chacun).
-  const attente = eleves.filter(sansReponse);
+  const attente = eleves.filter((e) => sansReponse(e, t));
   const coches = new Set((attente.length ? attente : eleves).map((e) => e.absence_id));
   $('#tache-eleves').innerHTML = eleves.map((e) =>
-    `<label class="case"><input type="checkbox" name="absence" value="${e.absence_id}" ${coches.has(e.absence_id) ? 'checked' : ''}><span>${esc(e.nom)}</span><span class="details">${sansReponse(e) ? 'en attente · ' : ''}${esc(e.groupe)}</span></label>`).join('');
+    `<label class="case"><input type="checkbox" name="absence" value="${e.absence_id}" ${coches.has(e.absence_id) ? 'checked' : ''}><span>${esc(e.nom)}</span><span class="details">${sansReponse(e, t) ? 'en attente · ' : ''}${esc(e.groupe)}</span></label>`).join('');
   const tous = $('#tache-tous');
   const majTous = () => {
     const cases = [...form.querySelectorAll('[name=absence]')];
@@ -760,9 +774,15 @@ function ongletCalendrier(contenu, tournois, groupes) {
   const iso = (d) => d.toLocaleDateString('en-CA');
   const premier = new Date(an, mo - 1, 1, 12);
   const nbJours = new Date(an, mo, 0).getDate();
-  const decalage = (premier.getDay() + 6) % 7; // semaine commençant le lundi
+  // Calendrier scolaire : lundi au vendredi seulement (pas de cours la fin de semaine).
+  let premierJourClasse = new Date(premier);
+  while (premierJourClasse.getDay() % 6 === 0) premierJourClasse.setDate(premierJourClasse.getDate() + 1);
+  const decalage = premierJourClasse.getDay() - 1; // lundi = 0
   const parJour = {};
-  for (let j = 1; j <= nbJours; j++) parJour[iso(new Date(an, mo - 1, j, 12))] = [];
+  for (let j = 1; j <= nbJours; j++) {
+    const d = new Date(an, mo - 1, j, 12);
+    if (d.getDay() % 6 !== 0) parJour[iso(d)] = [];
+  }
   for (const t of tournois) {
     for (const e of t.eleves) {
       if (vue.groupe && e.groupe !== vue.groupe) continue;
@@ -786,7 +806,7 @@ function ongletCalendrier(contenu, tournois, groupes) {
     const d = new Date(jour + 'T12:00');
     const n = compte(liste);
     const niveau = n ? Math.min(4, Math.ceil((n / max) * 4)) : 0;
-    const cls = ['cal-jour', `n${niveau}`, d.getDay() % 6 === 0 ? 'fds' : '', jour === auj() ? 'auj' : '', jour === vue.jour ? 'choisi' : ''].join(' ');
+    const cls = ['cal-jour', `n${niveau}`, jour === auj() ? 'auj' : '', jour === vue.jour ? 'choisi' : ''].join(' ');
     cases += `<button class="${cls}" data-jour="${jour}" aria-label="${dateFr(jour)} : ${n} absent${n > 1 ? 's' : ''}">
       <span class="cal-num">${d.getDate()}</span>${n ? `<span class="cal-nb">${n}</span>` : ''}${attendReponse(liste) ? '<span class="cal-point" aria-hidden="true"></span>' : ''}
     </button>`;
@@ -803,11 +823,11 @@ function ongletCalendrier(contenu, tournois, groupes) {
     </div>
     <div class="filtres">
       ${filtreGroupe(groupes)}
-      <p class="aide cal-resume">${total} élève${total > 1 ? 's' : ''} absent${total > 1 ? 's' : ''} ce mois-ci${pic.n ? ` · pointe le ${dateFr(pic.j, { day: 'numeric', month: 'long' })} (${pic.n})` : ''}</p>
+      <p class="aide cal-resume">${total} élève${total > 1 ? 's' : ''} absent${total > 1 ? 's' : ''} ce mois-ci (jours de classe)${pic.n ? ` · pointe le ${dateFr(pic.j, { day: 'numeric', month: 'long' })} (${pic.n})` : ''}</p>
     </div>
     <section class="carte calendrier-carte">
       <div class="calendrier">
-        ${['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((j, i) => `<span class="cal-entete"><span class="court">${j}</span><span class="long">${['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][i]}</span></span>`).join('')}
+        ${['L', 'M', 'M', 'J', 'V'].map((j, i) => `<span class="cal-entete"><span class="court">${j}</span><span class="long">${['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi'][i]}</span></span>`).join('')}
         ${cases}
       </div>
       <div class="legende" aria-hidden="true">${estDirection() ? '' : '<span class="leg-point"><span class="cal-point"></span> À traiter</span>'}<span>Moins</span><i class="n1"></i><i class="n2"></i><i class="n3"></i><i class="n4"></i><span>Plus d'absents</span></div>
